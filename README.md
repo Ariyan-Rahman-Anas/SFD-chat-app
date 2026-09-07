@@ -15,6 +15,7 @@ built against the given [Chat API](https://frontend-task-chatapp.onrender.com/do
 - **Tailwind CSS v4** for styling
 - **Socket.io client** for real-time delivery
 - **lucide-react** for icons
+- **pnpm** as the package manager
 - No state-management library — plain React state/context plus a couple of
   small custom hooks (`useConversations`, `useMessages`) was enough for this
   scope and kept the dependency list short.
@@ -22,8 +23,8 @@ built against the given [Chat API](https://frontend-task-chatapp.onrender.com/do
 ## Running locally
 
 ```bash
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
 
 Open `http://localhost:3000`. The app talks to the live hosted API by
@@ -34,7 +35,7 @@ default; to point it at a different instance, set:
 NEXT_PUBLIC_API_URL=https://your-api-host
 ```
 
-`npm run build && npm run start` builds and serves the production build.
+`pnpm build && pnpm start` builds and serves the production build.
 
 ## Project structure
 
