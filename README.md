@@ -3,8 +3,8 @@
 A real-time direct + group chat app (Part 1) and its landing page (Part 2),
 built against the given [Chat API](https://frontend-task-chatapp.onrender.com/docs/).
 
-- **Live app:** _add Vercel URL after deploy_ → `/login`
-- **Landing page:** _add Vercel URL after deploy_ → `/`
+- **Live app:** https://task-five-silk.vercel.app/login
+- **Landing page:** https://task-five-silk.vercel.app/
 - **API documentation:** [`docs/API.md`](docs/API.md)
 - **Repo:** https://github.com/Ariyan-Rahman-Anas/chat-app-frontend-task
 
