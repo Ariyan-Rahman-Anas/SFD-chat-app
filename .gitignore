@@ -44,4 +44,7 @@ next-env.d.ts
 # local agent state
 .claude/
 
+# personal notes, not for the submission
+INTERVIEW_PREP.md
+
 .vercel

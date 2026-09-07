@@ -3,10 +3,11 @@
 A real-time direct + group chat app (Part 1) and its landing page (Part 2),
 built against the given [Chat API](https://frontend-task-chatapp.onrender.com/docs/).
 
-- **Live app:** https://task-five-silk.vercel.app/login
-- **Landing page:** https://task-five-silk.vercel.app/
+- **Live app:** https://sfd-anas-task.vercel.app/login
+- **Landing page:** https://sfd-anas-task.vercel.app/
 - **API documentation:** [`docs/API.md`](docs/API.md)
-- **Repo:** https://github.com/Ariyan-Rahman-Anas/chat-app-frontend-task
+- **API issues found (detailed, with evidence):** [`API_ISSUES.md`](API_ISSUES.md)
+- **Repo:** https://github.com/Ariyan-Rahman-Anas/SFD-chat-app
 
 ## Tech stack
 
@@ -58,8 +59,10 @@ src/
     api.ts                Typed REST client
     socket.ts              Socket connection + payload normalization
     types.ts                Shared types
+    utils.ts                Formatting/class-name helpers
 docs/
   API.md                  Part 1 API documentation deliverable
+API_ISSUES.md              Detailed API issues log, with reproduction evidence
 ```
 
 ---
@@ -141,60 +144,69 @@ than handing over the brief and taking the output as-is:
   scope trade-offs like skipping group-admin UI) rather than dictated
   file-by-file.
 - **Testing:** rather than trust the implementation on inspection, Claude
-  Code installed Playwright and drove real multi-user browser sessions
-  against the running dev server — two and three simulated users, direct
-  messages, group creation, and checked whether events actually arrived
-  live in another browser context. That testing is what caught the two
-  real bugs below; I would not have caught the socket payload mismatch
-  from reading the code.
-- **What I changed/pushed back on:** I redirected it away from a stale
-  closure bug in the "start new conversation → select it" flow (it
-  originally tried to read the just-created conversation out of
-  React state that hadn't updated yet), and away from a state-updater
-  anti-pattern where an async refetch was triggered from inside a
-  `setState` updater function (harmless here, but wrong — React can invoke
-  updaters more than once). Both were caught and fixed before being
-  treated as done.
+  Code installed Playwright and drove real multi-user browser sessions —
+  two and three simulated users, direct messages, group creation, scroll
+  behavior — against both the local dev server and, again, the final
+  Vercel deployment before calling it done. That's specifically what
+  caught the `message:new` socket payload mismatch (issue 1 in
+  `API_ISSUES.md`): the code looked correct on inspection, but two
+  browser sessions talking to each other over a real socket connection
+  showed one side never receiving the other's messages. It also showed
+  that an apparent "the new group doesn't show up" failure was really the
+  shared demo backend responding slowly under concurrent load, not a bug
+  — which led to a small UX fix (see below) rather than a wasted chase
+  for a nonexistent race condition.
+- **What I changed/pushed back on:** two issues were caught by review
+  rather than by running anything — I don't take generated code as
+  correct just because it compiles. One was a stale-closure bug in the
+  "start a new conversation → select it" flow: it read the just-created
+  conversation back out of React state that the surrounding function's
+  closure had captured *before* the refetch that would have updated it,
+  so the lookup could never succeed. The other was a `setState` updater
+  function with an async side effect (a conversation refetch) triggered
+  from inside it — harmless in practice here, but a real anti-pattern,
+  since React can invoke a state updater more than once. Both were
+  flagged and restructured before I considered the hook code done.
+- **A finding that turned out not to be a bug:** during testing, creating
+  a group appeared to hang — the new group wouldn't show up in the
+  sidebar for several seconds. Rather than accept that as "flaky" or
+  chase a race condition that didn't exist, the actual `GET /conversations`
+  network response was timed directly, which showed the shared demo
+  backend genuinely taking several seconds to respond under concurrent
+  multi-session load (see issue 9 in `API_ISSUES.md`). The real fix was
+  a small UX change: the "new group" dialog now stays open (with its
+  spinner) until the sidebar refresh actually resolves, instead of
+  closing immediately and leaving the sidebar looking stale in the
+  meantime.
 
 ### Issues I ran into with the given API
 
-- **`message:new` socket payload doesn't match the REST `Message` shape.**
-  It uses `id` instead of `_id`, and sends `createdAt` as an epoch-ms
-  number instead of an ISO string. Missed on first pass because it doesn't
-  throw — it just silently produces messages with `undefined` ids. Fixed
-  with one normalizer (`lib/socket.ts#normalizeSocketMessage`) so the rest
-  of the app only ever sees one `Message` shape. See `docs/API.md` for the
-  full comparison.
-- **The backend doesn't reject empty messages.** `POST /messages` with
-  `text: ""` returns `201` and stores it. "Empty messages shouldn't be
-  sendable" is enforced entirely client-side (composer disables Send on
-  blank/whitespace text); the message list also renders any stray empty
-  message gracefully (`(empty message)`, italicized) instead of an
-  awkward blank bubble, in case one already exists in a conversation's
-  history from earlier testing.
-- **Posting to a non-existent `conversationId` returns `200` with a `null`
-  body** instead of a `404`. And an invalid (malformed) `userId` on
-  `POST /conversations` returns a raw `500` with a Mongoose cast-error
-  message rather than a clean `400`. Neither is something the client can
-  route around gracefully — I documented both in `docs/API.md` rather than
-  writing speculative handling for error shapes I can't actually trigger
-  cleanly.
-- **`GET /users/search` is prefix-only**, not substring. Searching
-  `"User B"` won't find `"Test User B"`. The new-chat search applies an
-  additional client-side substring filter on top of the API's results as
-  a graceful workaround, rather than surprising users with "no results"
-  for a query that should obviously match.
-- **`GET /health` is served at the host root**, not under `/api`, even
-  though the spec lists it alongside the other `/api`-scoped endpoints.
-- **This is a shared demo backend** — the `LoginRequest` example phone
-  number in the Swagger spec (`+15551234567`) already had a large message
-  history from other candidates' testing by the time I used it, and
-  `GET /conversations` response times varied noticeably (well under a
-  second normally, several seconds under concurrent multi-user load in my
-  own Playwright tests). Worth knowing if a reviewer sees a moment's delay
-  after creating a group — it's the shared backend, not a stuck client
-  (the UI does wait for the refresh to actually complete before closing
-  the dialog, rather than closing optimistically and hoping).
+Yes — several. The full list, each with the exact `curl` command and
+response that reproduces it, why it matters, and what the app does about
+it, is in **[`API_ISSUES.md`](API_ISSUES.md)**. In short:
+
+1. The `message:new` socket event doesn't match the REST `Message` shape
+   (`id` vs `_id`, epoch-ms number vs ISO string for `createdAt`) — fixed
+   with one normalizer so the rest of the app only ever sees one shape.
+2. The backend doesn't reject empty/whitespace messages — enforced
+   client-side instead, since the requirement is real even if the API
+   doesn't help with it.
+3. Sending to a non-existent `conversationId` returns `200` with a `null`
+   body instead of a `404`; an invalid `userId` on `POST /conversations`
+   returns a raw `500` (a leaked Mongoose error) instead of a clean `400`.
+4. `GET /users/search` matches by prefix only, not substring — softened
+   client-side with an additional filter over the API's results.
+5. `GET /health` is served at the host root, not under `/api`, despite
+   being listed alongside the `/api`-scoped endpoints in the spec.
+6. `POST /conversations` (direct) returns unpopulated participant ids,
+   unlike `GET /conversations` — the app re-fetches the list to get a
+   displayable name immediately after creating one.
+7. This is a shared demo backend: the example phone number from the
+   Swagger spec already had a large history from other candidates, and
+   `GET /conversations` visibly slows down under concurrent multi-session
+   load — not a client bug if a reviewer sees a moment's delay after
+   creating a group (the UI does wait for that refresh to actually
+   resolve before closing its dialog, rather than assuming success).
 
 ### What I'd improve with more time
 
