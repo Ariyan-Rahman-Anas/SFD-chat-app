@@ -41,8 +41,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# local agent state
+# local agent state (Next.js dev server auto-regenerates this)
 .claude/
+AGENTS.md
 
 # personal notes, not for the submission
 INTERVIEW_PREP.md
