@@ -49,19 +49,26 @@ function writeSession(session: StoredSession | null) {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  // Restore any stored session synchronously on first render (rather than
-  // via an effect) so there's no render where a logged-in user briefly
-  // flashes the login page before the effect has a chance to run.
-  const [user, setUser] = useState<User | null>(() => readSession()?.user ?? null);
-  const [token, setToken] = useState<string | null>(() => {
-    const t = readSession()?.token ?? null;
-    setAuthToken(t);
-    return t;
-  });
-  const [isLoading, setIsLoading] = useState(() => readSession() !== null);
+  // Deliberately NOT read from localStorage in these initial values. This
+  // component renders on the server first (where there's no localStorage),
+  // then hydrates on the client — if the client's first render produced a
+  // different result than the server's, React would throw a hydration
+  // mismatch. Starting every render at the same "unknown yet" state and
+  // only reading localStorage inside an effect (which only ever runs on
+  // the client, after hydration) keeps server and client in sync.
+  const [user, setUser] = useState<User | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (!token) return;
+    const session = readSession();
+    if (!session) {
+      setIsLoading(false);
+      return;
+    }
+    setAuthToken(session.token);
+    setToken(session.token);
+    setUser(session.user);
     // Verify the restored token still works; log out silently if it doesn't.
     api
       .me()
@@ -73,8 +80,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         writeSession(null);
       })
       .finally(() => setIsLoading(false));
-    // Only ever needs to run once, against whatever token was restored at mount.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const login = useCallback(async (phone: string, name: string) => {

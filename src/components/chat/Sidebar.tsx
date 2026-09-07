@@ -19,6 +19,7 @@ export function Sidebar({
   onSelect,
   onStartDirect,
   onGroupCreated,
+  onRetry,
   onLogout,
 }: {
   currentUser: User;
@@ -30,6 +31,7 @@ export function Sidebar({
   onSelect: (conversation: Conversation) => void;
   onStartDirect: (userId: string) => Promise<void>;
   onGroupCreated: () => Promise<void>;
+  onRetry: () => void;
   onLogout: () => void;
 }) {
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -45,7 +47,7 @@ export function Sidebar({
   }
 
   return (
-    <aside className="flex h-full w-full max-w-xs shrink-0 flex-col border-r border-neutral-200 bg-white">
+    <aside className="flex h-full w-full flex-col border-r border-neutral-200 bg-white md:w-80 md:shrink-0">
       <div className="flex items-center gap-3 border-b border-neutral-200 p-4">
         <Avatar name={currentUser.name} />
         <div className="min-w-0 flex-1">
@@ -79,7 +81,15 @@ export function Sidebar({
         )}
 
         {!isLoading && error && (
-          <p className="px-3 py-6 text-center text-sm text-red-500">{error}</p>
+          <div className="px-4 py-6 text-center">
+            <p className="text-sm text-red-500">{error}</p>
+            <button
+              onClick={onRetry}
+              className="mt-3 rounded-full border border-neutral-200 px-4 py-1.5 text-xs font-medium text-neutral-600 hover:border-neutral-300 hover:bg-neutral-50"
+            >
+              Try again
+            </button>
+          </div>
         )}
 
         {!isLoading && !error && conversations.length === 0 && (

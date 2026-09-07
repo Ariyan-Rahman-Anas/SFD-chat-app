@@ -84,5 +84,5 @@ export function useConversations() {
     };
   }, [socket, upsertFromMessage, refresh]);
 
-  return { conversations, isLoading, error, refresh };
+  return { conversations, isLoading, error, refresh, upsertFromMessage };
 }

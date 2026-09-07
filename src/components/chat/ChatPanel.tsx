@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ChevronDown, MessageCircle } from "lucide-react";
+import { ArrowLeft, ChevronDown, MessageCircle } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { Spinner } from "@/components/ui/Spinner";
 import { MessageBubble } from "./MessageBubble";
@@ -9,7 +9,7 @@ import { MessageComposer } from "./MessageComposer";
 import { DateDivider } from "./DateDivider";
 import { useMessages } from "@/hooks/useMessages";
 import { api } from "@/lib/api";
-import type { Conversation, User } from "@/lib/types";
+import type { Conversation, Message, User } from "@/lib/types";
 
 const NEAR_BOTTOM_THRESHOLD = 120;
 const NEAR_TOP_THRESHOLD = 80;
@@ -18,10 +18,14 @@ export function ChatPanel({
   conversation,
   currentUser,
   onOpened,
+  onBack,
+  onMessageSent,
 }: {
   conversation: Conversation | null;
   currentUser: User;
   onOpened: (conversationId: string, latestMessageAt?: string) => void;
+  onBack?: () => void;
+  onMessageSent?: (message: Message) => void;
 }) {
   const { messages, isLoading, isLoadingMore, hasMore, error, loadMore, addMessage } =
     useMessages(conversation?._id ?? null);
@@ -114,6 +118,10 @@ export function ChatPanel({
     if (!conversation) return;
     const message = await api.sendMessage(conversation._id, text);
     addMessage(message);
+    // The sender never receives their own `message:new` socket echo, so
+    // the sidebar's last-message preview needs updating here explicitly —
+    // otherwise it would only ever reflect messages from other people.
+    onMessageSent?.(message);
     scrollToBottom("smooth");
     onOpened(conversation._id, message.createdAt);
   }
@@ -144,6 +152,13 @@ export function ChatPanel({
   return (
     <div className="flex min-w-0 flex-1 flex-col bg-neutral-50">
       <div className="flex items-center gap-3 border-b border-neutral-200 bg-white p-4">
+        <button
+          onClick={onBack}
+          className="-ml-1.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-100 md:hidden"
+          aria-label="Back to conversations"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </button>
         <Avatar name={title} isGroup={conversation.type === "group"} />
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-neutral-900">{title}</p>

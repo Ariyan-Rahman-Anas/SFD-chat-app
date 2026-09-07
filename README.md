@@ -99,8 +99,14 @@ breadth on group settings.
 
 **Real-time + auto-scroll**, the part called out as the area to polish:
 - New messages append via a `message:new` socket listener, deduplicated by
-  message id (the same id could otherwise arrive twice — once from the
-  REST response when *you* send a message, once from the socket echo).
+  message id (a message you just loaded via the initial history fetch
+  could otherwise also arrive as a live socket event a moment later, and
+  get appended twice). Notably, the API's socket does **not** echo a
+  message back to the sender who sent it — only to other participants —
+  so the sender's own message list and the conversation-list preview are
+  updated directly from the REST response, not by waiting for an event
+  that will never arrive for that message (see issue 2 in
+  `API_ISSUES.md`).
 - Auto-scroll pins to the bottom on new messages only while the user is
   already near the bottom; otherwise it holds position and shows a "new
   messages" pill instead of yanking them down mid-read. Scroll position is
@@ -114,6 +120,13 @@ breadth on group settings.
   because the API doesn't offer it, or wire something in the browser storage,
   I want it to be very clear this is a client-side approximation, and it's
   isolated to `useUnreadTracker.ts` and never presented as a synced feature.
+
+**Responsive layout:** below the `md` breakpoint, the chat screen shows
+either the conversation list or the open conversation — never both side
+by side, since there isn't room for either to be usable — with a back
+button in the chat panel's header to return to the list. From `md` up,
+both columns show at once, as a fixed-width sidebar next to a flexible
+chat panel.
 
 ### Part 2: landing page
 
@@ -173,7 +186,7 @@ than handing over the brief and taking the output as-is:
   chase a race condition that didn't exist, the actual `GET /conversations`
   network response was timed directly, which showed the shared demo
   backend genuinely taking several seconds to respond under concurrent
-  multi-session load (see issue 9 in `API_ISSUES.md`). The real fix was
+  multi-session load (see issue 10 in `API_ISSUES.md`). The real fix was
   a small UX change: the "new group" dialog now stays open (with its
   spinner) until the sidebar refresh actually resolves, instead of
   closing immediately and leaving the sidebar looking stale in the
@@ -188,20 +201,27 @@ it, is in **[`API_ISSUES.md`](API_ISSUES.md)**. In short:
 1. The `message:new` socket event doesn't match the REST `Message` shape
    (`id` vs `_id`, epoch-ms number vs ISO string for `createdAt`) — fixed
    with one normalizer so the rest of the app only ever sees one shape.
-2. The backend doesn't reject empty/whitespace messages — enforced
+2. **The sender never receives their own `message:new` event** — only
+   other participants do. Missed on first pass because a single sender's
+   own message list still looked right (it's populated from the REST
+   response, not the socket); what silently broke was the *sidebar*
+   preview, which only updated for messages from other people. Fixed by
+   updating the sidebar directly from the REST response too, not just
+   from socket events.
+3. The backend doesn't reject empty/whitespace messages — enforced
    client-side instead, since the requirement is real even if the API
    doesn't help with it.
-3. Sending to a non-existent `conversationId` returns `200` with a `null`
+4. Sending to a non-existent `conversationId` returns `200` with a `null`
    body instead of a `404`; an invalid `userId` on `POST /conversations`
    returns a raw `500` (a leaked Mongoose error) instead of a clean `400`.
-4. `GET /users/search` matches by prefix only, not substring — softened
+5. `GET /users/search` matches by prefix only, not substring — softened
    client-side with an additional filter over the API's results.
-5. `GET /health` is served at the host root, not under `/api`, despite
-   being listed alongside the `/api`-scoped endpoints in the spec.
 6. `POST /conversations` (direct) returns unpopulated participant ids,
    unlike `GET /conversations` — the app re-fetches the list to get a
    displayable name immediately after creating one.
-7. This is a shared demo backend: the example phone number from the
+7. `GET /health` is served at the host root, not under `/api`, despite
+   being listed alongside the `/api`-scoped endpoints in the spec.
+8. This is a shared demo backend: the example phone number from the
    Swagger spec already had a large history from other candidates, and
    `GET /conversations` visibly slows down under concurrent multi-session
    load — not a client bug if a reviewer sees a moment's delay after

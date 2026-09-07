@@ -20,7 +20,7 @@ export default function ChatPage() {
     if (!authLoading && !user) router.replace("/login");
   }, [authLoading, user, router]);
 
-  const { conversations, isLoading, error, refresh } = useConversations();
+  const { conversations, isLoading, error, refresh, upsertFromMessage } = useConversations();
   const { isUnread, markRead } = useUnreadTracker(user?._id ?? null);
 
   const selected = useMemo(
@@ -56,24 +56,37 @@ export default function ChatPage() {
 
   return (
     <div className="flex h-dvh w-full overflow-hidden">
-      <Sidebar
-        currentUser={user}
-        conversations={conversations}
-        selectedId={selectedId}
-        isLoading={isLoading}
-        error={error}
-        isUnread={(c: Conversation) =>
-          isUnread(c._id, c.lastMessage?.createdAt, c.lastMessage?.sender)
-        }
-        onSelect={(c) => setSelectedId(c._id)}
-        onStartDirect={handleStartDirect}
-        onGroupCreated={handleGroupCreated}
-        onLogout={() => {
-          logout();
-          router.replace("/login");
-        }}
-      />
-      <ChatPanel conversation={selected} currentUser={user} onOpened={handleOpened} />
+      {/* On mobile, show either the conversation list or the open chat —
+          never both. From md upward, both columns are always visible. */}
+      <div className={selected ? "hidden md:flex" : "flex w-full md:w-auto"}>
+        <Sidebar
+          currentUser={user}
+          conversations={conversations}
+          selectedId={selectedId}
+          isLoading={isLoading}
+          error={error}
+          isUnread={(c: Conversation) =>
+            isUnread(c._id, c.lastMessage?.createdAt, c.lastMessage?.sender)
+          }
+          onSelect={(c) => setSelectedId(c._id)}
+          onStartDirect={handleStartDirect}
+          onGroupCreated={handleGroupCreated}
+          onRetry={() => refresh()}
+          onLogout={() => {
+            logout();
+            router.replace("/login");
+          }}
+        />
+      </div>
+      <div className={selected ? "flex w-full min-w-0 md:w-auto md:flex-1" : "hidden md:flex md:flex-1"}>
+        <ChatPanel
+          conversation={selected}
+          currentUser={user}
+          onOpened={handleOpened}
+          onBack={() => setSelectedId(null)}
+          onMessageSent={upsertFromMessage}
+        />
+      </div>
     </div>
   );
 }
